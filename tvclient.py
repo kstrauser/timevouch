@@ -14,6 +14,9 @@ import simplejson
 from PySide import QtCore
 from PySide import QtGui
 
+TIMEVOUCHURL = 'https://timevouch.com/api'
+DIGESTCHUNKSIZE = 10 * 1024 * 1024
+
 def sendfiletotimevouch(digest, secretword):
     """Send the digest and secretword to TimeVouch.com. Returns either
     True or False to indicate success, and a dict of keys and values
@@ -23,7 +26,7 @@ def sendfiletotimevouch(digest, secretword):
         postvars['secretword'] = secretword
     data = urllib.urlencode(postvars)
     try:
-        request = urllib2.urlopen('http://timevouch.com/api', data)
+        request = urllib2.urlopen(TIMEVOUCHURL, data)
     except urllib2.HTTPError, error:
         return False, simplejson.loads(error.read())
     return True, simplejson.loads(request.read())
@@ -106,10 +109,9 @@ class MainForm(QtGui.QDialog):
         progressdivisor = float(os.path.getsize(filename)) / 100
         infile = open(filename)
         totalread = 0
-        chunksize = 10 * 1024 * 1024
         self.digest.setText('Digesting...')
         while True:
-            data = infile.read(chunksize)
+            data = infile.read(DIGESTCHUNKSIZE)
             if not data:
                 break
             totalread += len(data)
