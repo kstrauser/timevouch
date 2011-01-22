@@ -1,6 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+"""Functions and a GUI for registering and verifying files with the
+TimeVouch.time free public timestamping service"""
+
 import os
 import sys
 import urllib
@@ -8,71 +11,90 @@ import urllib2
 from hashlib import sha256
 
 import simplejson
-from PySide.QtCore import *
-from PySide.QtGui import *
+from PySide import QtCore
+from PySide import QtGui
 
-class MainForm(QDialog):
+def sendfiletotimevouch(digest, secretword):
+    """Send the digest and secretword to TimeVouch.com. Returns either
+    True or False to indicate success, and a dict of keys and values
+    returned by the service"""
+    postvars = {'docid': digest}
+    if secretword:
+        postvars['secretword'] = secretword
+    data = urllib.urlencode(postvars)
+    try:
+        request = urllib2.urlopen('http://timevouch.com/api', data)
+    except urllib2.HTTPError, error:
+        return False, simplejson.loads(error.read())
+    return True, simplejson.loads(request.read())
+
+class MainForm(QtGui.QDialog):
+    """Give users a GUI to easily interact with the TimeVouch.com
+    timestamping service"""
      
     def __init__(self, parent=None):
         super(MainForm, self).__init__(parent)
 
         self.setWindowTitle('TimeVouch.com Client')
         
-        self.formlayout = QFormLayout()
+        self.formlayout = QtGui.QFormLayout()
 
-        filenamelayout = QHBoxLayout()
-        self.filename = QLineEdit()
+        # Use a horizontal layout to put the 'Select' button right
+        # after the filename text field
+        filenamelayout = QtGui.QHBoxLayout()
+        self.filename = QtGui.QLineEdit()
         self.filename.editingFinished.connect(self.calcdigest)
         filenamelayout.addWidget(self.filename, stretch=1)
-        self.filedialogbutton = QPushButton('Select')
-        self.filedialogbutton.clicked.connect(self.openfiledialog)
+
+        self.filedialogbutton = QtGui.QPushButton('Select')
+        self.filedialogbutton.clicked.connect(self.getanddigestfile)
+        # This button is clickable, but don't bounce to it with the
+        # keyboard
+        self.filedialogbutton.setFocusPolicy(QtCore.Qt.NoFocus)
         filenamelayout.addWidget(self.filedialogbutton, stretch=0)
 
         self.formlayout.addRow('File', filenamelayout)
 
-        self.digest = QLabel()
-        self.digest.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        # This label gets update with the digest after we calculate it
+        self.digest = QtGui.QLabel()
+        self.digest.setFrameStyle(QtGui.QFrame.Panel | QtGui.QFrame.Sunken)
         self.formlayout.addRow('Digest', self.digest)
 
-        self.digestprogress = QProgressBar()
+        # This shows the progress of very long calculations
+        self.digestprogress = QtGui.QProgressBar()
         self.digestprogress.setTextVisible(False)
         self.formlayout.addRow(self.digestprogress)
 
-        self.secretword = QLineEdit('')
+        # Enter secret words here
+        self.secretword = QtGui.QLineEdit('')
         self.formlayout.addRow('Secret word', self.secretword)
 
-        self.testbutton = QPushButton('test')
-        self.testbutton.clicked.connect(self.hashtest)
-        self.formlayout.addRow(self.testbutton)
-        
-        self.sendbutton = QPushButton('Send to TimeVouch.com')
+        if False:
+            self.testbutton = QtGui.QPushButton('test')
+            self.testbutton.clicked.connect(self.hashtest)
+            self.formlayout.addRow(self.testbutton)
+
+        # Handle the registration process
+        self.sendbutton = QtGui.QPushButton('Send the digest to TimeVouch.com')
         self.sendbutton.clicked.connect(self.sendfile)
         self.sendbutton.setDisabled(True)
         self.formlayout.addRow(self.sendbutton)
         
         self.setLayout(self.formlayout)
+        self.setMinimumWidth(640)
 
-    def hashtest(self):
-        filename = "/usr/share/media/music/singles/Arlo Guthrie - Alice's Restaurant Massacree.mp3"
-        self.filename.setText(filename)
-        self.calcdigest()
-        # self.calcdigest('/vmlinuz')
-        # self.calcdigest('/home/kirk/.VirtualBox/HardDisks/Windows XP.vdi')
-        # self.calcdigest('/home/kirk/.thunderbird/iklcxtsb.default/ImapMail/mail.daycos.com/INBOX.sbd/xrsnet')
+    # def hashtest(self):
+    #     """Useful for debugging"""
+    #     filename = "/usr/share/media/music/singles/Arlo Guthrie - Alice's Restaurant Massacree.mp3"
+    #     self.filename.setText(filename)
+    #     self.calcdigest()
+    #     # self.calcdigest('/vmlinuz')
+    #     # self.calcdigest('/home/kirk/.VirtualBox/HardDisks/Windows XP.vdi')
+    #     # self.calcdigest('/home/kirk/.thunderbird/iklcxtsb.default/ImapMail/mail.daycos.com/INBOX.sbd/xrsnet')
         
-    def passwordchanger(self):
-        print 'passwordchange'
-
-    def openfiledialog(self):
-        dialog = QFileDialog(self)
-        dialog.setFileMode(QFileDialog.ExistingFile)
-        if not dialog.exec_():
-            return
-        filename = dialog.selectedFiles()[0]
-        self.filename.setText(filename)
-        self.calcdigest()
-
     def calcdigest(self):
+        """Calculate the SHA-256 digest of the file whose name is in
+        the self.filename widget"""
         hasher = sha256()
         filename = self.filename.text()
         if not filename:
@@ -98,22 +120,27 @@ class MainForm(QDialog):
         self.digestprogress.reset()
         self.sendbutton.setEnabled(True)
 
-    def sendfile(self):
-        postvars = {'docid': self.digest.text()}
-        if self.secretword.text():
-            postvars['secretword'] = self.secretword.text()
-        data = urllib.urlencode(postvars)
-        error = False
-        try:
-            request = urllib2.urlopen('http://timevouch.com/api', data)
-        except urllib2.HTTPError, error:
-            json = simplejson.loads(error.read())
-            QMessageBox.warning(self, 'Error condition - %s' % json['error'], json['message'])
+    def getanddigestfile(self):
+        """Allow the user to select a file, then calculate its
+        digest"""
+        dialog = QtGui.QFileDialog(self)
+        dialog.setFileMode(QtGui.QFileDialog.ExistingFile)
+        if not dialog.exec_():
             return
-        json = simplejson.loads(request.read())
-        print json
+        filename = dialog.selectedFiles()[0]
+        self.filename.setText(filename)
+        self.calcdigest()
 
-        message = QMessageBox()
+    def sendfile(self):
+        """Send the digest (and possibly secret word) to the
+        TimeVouch.com server and display the results"""
+
+        success, json = sendfiletotimevouch(self.digest.text(), self.secretword.text())
+        if not success:
+            QtGui.QMessageBox.warning(self, 'Error condition - %s' % json['error'], json['message'])
+            return
+        
+        message = QtGui.QMessageBox()
         olddoc = json['olddocid']
         if olddoc:
             message.setWindowTitle('TimeVouch.com results - verified registration')
@@ -123,6 +150,8 @@ class MainForm(QDialog):
             message.setText('This file had never been seen before, and has now been registered.')
 
         def maketr(key, value, style=None):
+            """Turn the given key, value, and optional CSS style into
+            a table row"""
             if style:
                 stylestr = ' style="%s"' % style
             else:
@@ -147,10 +176,7 @@ class MainForm(QDialog):
         message.exec_()
         
 if __name__ == '__main__':
-    # Create the Qt Application
-    app = QApplication(sys.argv)
-    # Create and show the form
+    app = QtGui.QApplication(sys.argv)
     form = MainForm()
     form.show()
-    # Run the main Qt loop
     sys.exit(app.exec_())
