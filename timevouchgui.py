@@ -1,35 +1,45 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-"""Functions and a GUI for registering and verifying files with the
-TimeVouch.time free public timestamping service"""
+# Permission is hereby granted, free of charge, to any person
+# obtaining a copy of this software and associated documentation files
+# (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge,
+# publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so,
+# subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+# BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+# ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+"""A GUI for registering and verifying files with the TimeVouch.time
+free public timestamping service"""
 
 import os
 import sys
-import urllib
-import urllib2
 from hashlib import sha256
 
-import simplejson
 from PySide import QtCore
 from PySide import QtGui
 
-TIMEVOUCHURL = 'https://timevouch.com/api'
-DIGESTCHUNKSIZE = 10 * 1024 * 1024
+import timevouchclient
 
-def sendfiletotimevouch(digest, secretword):
-    """Send the digest and secretword to TimeVouch.com. Returns either
-    True or False to indicate success, and a dict of keys and values
-    returned by the service"""
-    postvars = {'docid': digest}
-    if secretword:
-        postvars['secretword'] = secretword
-    data = urllib.urlencode(postvars)
-    try:
-        request = urllib2.urlopen(TIMEVOUCHURL, data)
-    except urllib2.HTTPError, error:
-        return False, simplejson.loads(error.read())
-    return True, simplejson.loads(request.read())
+__author__ = "Kirk Strauser"
+__copyright__ = "Copyright 2011, Kirk Strauser"
+__credits__ = ["Kirk Strauser"]
+__license__ = "MIT License"
+__maintainer__ = "Kirk Strauser"
+__email__ = "kirk@strauser.com"
+__status__ = "Production"
 
 class MainForm(QtGui.QDialog):
     """Give users a GUI to easily interact with the TimeVouch.com
@@ -111,7 +121,7 @@ class MainForm(QtGui.QDialog):
         totalread = 0
         self.digest.setText('Digesting...')
         while True:
-            data = infile.read(DIGESTCHUNKSIZE)
+            data = infile.read(timevouchclient.DIGESTCHUNKSIZE)
             if not data:
                 break
             totalread += len(data)
@@ -137,16 +147,18 @@ class MainForm(QtGui.QDialog):
         """Send the digest (and possibly secret word) to the
         TimeVouch.com server and display the results"""
 
-        success, json = sendfiletotimevouch(self.digest.text(), self.secretword.text())
-        if not success:
-            QtGui.QMessageBox.warning(self, 'Error condition - %s' % json['error'], json['message'])
+        try:
+            json = timevouchclient.registerdigest(self.digest.text(), self.secretword.text())
+        except IOError as errordict:
+            QtGui.QMessageBox.warning(self, 'Error condition - %s' % errordict['error'], errordict['message'])
             return
         
         message = QtGui.QMessageBox()
-        olddoc = json['olddocid']
+        olddoc = json['olddigest']
         if olddoc:
             message.setWindowTitle('TimeVouch.com results - verified registration')
-            message.setText('This file has already been registered. Its contents have not been modified in any way since that time.')
+            message.setText('This file has already been registered. Its contents have '
+                            'not been modified in any way since that time.')
         else:
             message.setWindowTitle('TimeVouch.com results - new registration')
             message.setText('This file had never been seen before, and has now been registered.')
@@ -162,7 +174,7 @@ class MainForm(QtGui.QDialog):
             return '<tr><td>%s</td><td%s>%s</td></tr>' % (key, stylestr, value)
 
         lines = []
-        lines.append(maketr('Document ID:', json['docid'], 'color: blue;'))
+        lines.append(maketr('Digest:', json['digest'], 'color: blue;'))
         lines.append(maketr('Registered:', json['registered'], 'color: green;'))
         lines.append(maketr('Current time:', json['currenttime'], 'color: green;'))
         if olddoc:
