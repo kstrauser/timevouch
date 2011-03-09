@@ -1,0 +1,17 @@
+TimeVouch.com is a public timestamping service. Users can "register" the
+contents of files with the service, and then later use the service to prove
+that the files existed at the time of registration and haven't been altered.
+
+The timevouch project is a MIT-licensed interface to those services. It
+consists of:
+
+* timevouchclient.py, a client library which can be used to easily add
+  timestamping features to other applications, and
+
+* timevouchgui.py, a simple Qt GUI for registering and verifying files.
+
+Both this project and the TimeVouch.com website are under active
+development. However, the underlying service and its API are solid and
+production-ready right now, even if the site's appearance is still in
+flux. The service is considered "live" and fully ready for use, so please
+feel free to get in at the beginning!
