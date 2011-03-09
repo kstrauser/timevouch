@@ -40,7 +40,7 @@ __email__ = "kirk@strauser.com"
 __status__ = "Production"
 
 DIGESTCHUNKSIZE = 10 * 1024 * 1024
-TIMEVOUCHURL = 'https://timevouch.com/api'
+TIMEVOUCHURL = 'http://timevouch.com/api'
 
 def registerdigest(digest, secretword):
     """Send the digest and secretword to TimeVouch.com. Returns either
@@ -57,7 +57,7 @@ def registerdigest(digest, secretword):
             raise
         raise IOError(simplejson.loads(error.read()))
 
-def registerdirectorytree(directoryname, secretword, exitonchange=False):
+def registerdirectorytree(directoryname, secretword, exitonchange=False, followlinks=False):
     """Generate a digest of the given directory and all of its
     contents (directory names, file names, and file contents),
     recursively, then register it and return the results. Note that
@@ -74,12 +74,20 @@ def registerdirectorytree(directoryname, secretword, exitonchange=False):
     # starting with the most deeply nested
     dirhash = {}
     results = None
-    for dirname, subdirs, filenames in os.walk(directoryname, topdown=False):
+    for dirname, subdirs, filenames in os.walk(directoryname, topdown=False, followlinks=followlinks):
         # First, add in the names of every subdirectory of this directory and their hashes
         thisdirhash = sha256('DIRS')
         for subdir in sorted(subdirs):
-            subdirhash = dirhash.pop(os.path.join(dirname, subdir))
-            thisdirhash.update('\0%s%s' % (subdirhash, subdir))
+            # Subdirectories might not be hashed if they were symlinks
+            # or if they were deleted after os.walk discovered
+            # them. Either way, we take the tree as it is, not as we
+            # wish it to be.
+            try:
+                subdirhash = dirhash.pop(os.path.join(dirname, subdir))
+            except KeyError:
+                pass
+            else:
+                thisdirhash.update('\0%s%s' % (subdirhash, subdir))
             
         # Next, add in every file in this directory
         thisdirhash.update('\0FILES')
@@ -130,4 +138,4 @@ def registerstring(data, secretword):
 
 if __name__ == '__main__':
     import sys
-    print registerdirectorytree(sys.argv[1], 'passtest', False)
+    print registerdirectorytree(sys.argv[1], 'passtest', False, True)
